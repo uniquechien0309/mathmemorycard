@@ -39,6 +39,10 @@
             50% { transform: translateX(-50%) translateY(-10px); }
         }
         .animate-bounce-short { animation: bounce-short 1s ease-in-out infinite; }
+        
+        /* 隱藏卷軸但保持可滾動 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans min-h-screen no-select text-slate-800">
@@ -286,90 +290,107 @@
             );
 
             // 2. 遊戲進行畫面
-            if (gameState === 'playing') return (
-                <div className="max-w-6xl mx-auto px-4 pt-16 pb-64 min-h-screen relative">
-                    {/* 返回按鈕 */}
-                    <button onClick={() => setShowExitConfirm(true)} 
-                        className="absolute top-4 right-4 bg-white/90 backdrop-blur flex items-center gap-1 px-4 py-2 rounded-xl shadow-md font-bold text-slate-600 border border-slate-200 z-10 hover:bg-slate-50 transition-colors">
-                        返回設定
-                    </button>
-                    
-                    {/* 頂部計分板 */}
-                    <div className="flex flex-wrap gap-4 mb-8 justify-center">
-                        {players.slice(0, playerCount).map((p, i) => (
-                            <div key={i} className={`flex-1 min-w-[120px] max-w-[200px] p-4 rounded-2xl border-2 transition-all duration-300 ${i===currentPlayerIndex ? 'ring-4 ring-blue-400 bg-white shadow-xl scale-110 z-10' : 'opacity-70 bg-slate-50 border-slate-200'}`}>
-                                <div className={`font-bold flex items-center gap-1 mb-1 ${i===currentPlayerIndex?'text-blue-600':'text-slate-600'}`}>
-                                    <IconUser /> {p.name}
-                                </div>
-                                <div className="text-3xl font-black">{p.score} <span className="text-base font-normal text-slate-500">分</span></div>
-                            </div>
-                        ))}
-                    </div>
+            if (gameState === 'playing') {
+                // 根據牌的數量，動態計算牌桌的最大寬度，確保任何螢幕高度都不會超出版面產生卷軸
+                const getGridMaxWidth = () => {
+                    if (cardCount === 8) return 'min(100%, 140vh)'; // 放大 8 張的佔比
+                    if (cardCount === 16) return 'min(100%, 75vh)'; // 放大 16 張的佔比
+                    if (cardCount === 24) return 'min(100%, 110vh)'; // 放大 24 張的佔比
+                    return '100%';
+                };
 
-                    {/* 卡牌網格區 */}
-                    <div className={`grid gap-3 md:gap-4 max-w-5xl mx-auto w-full ${cardCount===8 ? 'grid-cols-2 md:grid-cols-4' : cardCount===16 ? 'grid-cols-4' : 'grid-cols-4 md:grid-cols-6'}`}>
-                        {cards.map((c, i) => (
-                            <div key={c.id} onClick={()=>handleCardClick(i)} className={`aspect-[3/4] perspective-1000 cursor-pointer ${c.isMatched ? 'opacity-0 pointer-events-none transition-all duration-1000' : ''}`}>
-                                <div className={`relative w-full h-full transform-style-3d card-transition ${c.isFlipped ? 'rotate-y-180' : ''}`}>
-                                    {/* 背面 */}
-                                    <div className="absolute inset-0 backface-hidden card-pattern rounded-2xl border-4 border-white shadow-md flex items-center justify-center">
-                                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white font-black text-3xl">?</div>
+                return (
+                    <div className="flex flex-col md:flex-row h-screen w-full bg-slate-100 overflow-hidden">
+                        {/* 左側面板：計分板與控制 (縮小寬度與內距) */}
+                        <div className="w-full md:w-48 lg:w-56 bg-white shadow-md md:shadow-xl flex flex-col p-3 md:p-4 z-20 md:h-full flex-shrink-0 relative">
+                            <button onClick={() => setShowExitConfirm(true)}
+                                className="mb-2 md:mb-6 bg-slate-100 hover:bg-slate-200 flex items-center justify-center gap-2 px-3 py-2 md:px-3 md:py-3 rounded-xl shadow-sm font-bold text-slate-600 transition-colors w-full text-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="md:w-5 md:h-5"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                                返回設定
+                            </button>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:flex md:flex-col gap-2 md:gap-3 overflow-y-auto no-scrollbar">
+                                {players.slice(0, playerCount).map((p, i) => (
+                                    <div key={i} className={`flex flex-col justify-center p-2 md:p-3 rounded-xl md:rounded-2xl border-2 transition-all duration-300 ${i===currentPlayerIndex ? 'ring-2 md:ring-4 ring-blue-400 bg-blue-50 border-blue-200 shadow-md md:scale-105 transform md:origin-left' : 'opacity-70 bg-slate-50 border-slate-200'}`}>
+                                        <div className={`font-bold flex items-center gap-1 text-xs md:text-sm ${i===currentPlayerIndex?'text-blue-600':'text-slate-600'}`}>
+                                            <IconUser /> <span className="truncate">{p.name}</span>
+                                        </div>
+                                        <div className="text-xl md:text-3xl font-black text-slate-800 leading-none mt-1">{p.score} <span className="text-xs md:text-sm font-normal text-slate-500">分</span></div>
                                     </div>
-                                    {/* 正面 */}
-                                    <div className="absolute inset-0 backface-hidden rotate-y-180 bg-white rounded-2xl border-4 border-slate-200 shadow-lg flex items-center justify-center p-2 text-center">
-                                        <span className={`font-black tracking-wider ${c.content.includes('+') || c.content.includes('-') || c.content.includes('×') ? 'text-2xl md:text-3xl lg:text-4xl text-slate-800' : 'text-4xl md:text-5xl lg:text-6xl text-blue-600'}`}>
-                                            {c.content}
-                                        </span>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 右側面板：遊戲區域 */}
+                        <div className="flex-1 flex items-center justify-center p-2 md:p-6 relative h-full overflow-hidden">
+                            <div className="w-full flex justify-center items-center h-full">
+                                <div style={{ maxWidth: getGridMaxWidth() }} className={`grid gap-2 md:gap-3 w-full ${cardCount===8 ? 'grid-cols-4' : cardCount===16 ? 'grid-cols-4' : 'grid-cols-6'}`}>
+                                    {cards.map((c, i) => (
+                                        <div key={c.id} onClick={()=>handleCardClick(i)} className={`aspect-[3/4] perspective-1000 cursor-pointer ${c.isMatched ? 'opacity-0 pointer-events-none transition-all duration-1000' : ''}`}>
+                                            <div className={`relative w-full h-full transform-style-3d card-transition ${c.isFlipped ? 'rotate-y-180' : ''}`}>
+                                                {/* 背面 (放大問號) */}
+                                                <div className="absolute inset-0 backface-hidden card-pattern rounded-xl border-2 md:border-4 border-white shadow-md flex items-center justify-center">
+                                                    <div className="w-10 h-10 md:w-16 md:h-16 bg-white/20 rounded-full flex items-center justify-center text-white font-black text-2xl md:text-5xl">?</div>
+                                                </div>
+                                                {/* 正面 (減小內距，放大字體) */}
+                                                <div className="absolute inset-0 backface-hidden rotate-y-180 bg-white rounded-xl border-2 md:border-4 border-slate-200 shadow-lg flex items-center justify-center p-0 md:p-1 text-center">
+                                                    <span className={`font-black tracking-tighter md:tracking-normal ${c.content.includes('+') || c.content.includes('-') || c.content.includes('×') ? 'text-xl md:text-3xl lg:text-4xl xl:text-5xl text-slate-800' : 'text-3xl md:text-5xl lg:text-6xl xl:text-7xl text-blue-600'}`}>
+                                                        {c.content}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 碰/放回 選項彈窗 (置中懸浮) */}
+                            {actionPending && !feedback && (
+                                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-lg p-6 md:p-8 rounded-3xl shadow-2xl border-2 border-blue-200 z-50 animate-bounce-short">
+                                    <p className="text-center font-black text-slate-700 text-xl md:text-2xl mb-6">答案一樣嗎？</p>
+                                    <div className="flex gap-4">
+                                        <button onClick={handlePong} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-4 md:py-5 rounded-2xl font-black text-xl md:text-2xl shadow-lg transition-transform hover:scale-105">
+                                            碰！
+                                        </button>
+                                        <button onClick={handlePass} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-4 md:py-5 rounded-2xl font-bold text-lg md:text-xl shadow-md transition-transform hover:scale-105">
+                                            放回
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 正確/錯誤 回饋提示 (全螢幕) */}
+                        {feedback && (
+                            <div className="fixed inset-0 flex items-center justify-center z-[60] pointer-events-none">
+                                <div className="absolute inset-0 bg-black/10 backdrop-blur-[2px]"></div>
+                                <div className={`relative px-8 py-6 rounded-3xl text-white font-black text-2xl md:text-4xl shadow-2xl transform scale-110 ${feedback.type==='success' ? 'bg-green-500' : feedback.type==='error' ? 'bg-red-500' : 'bg-blue-500'}`}>
+                                    {feedback.text}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 退出確認視窗 (全螢幕) */}
+                        {showExitConfirm && (
+                            <div className="fixed inset-0 flex items-center justify-center z-[100]">
+                                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowExitConfirm(false)}></div>
+                                <div className="relative bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm w-11/12 animate-bounce-short">
+                                    <h3 className="text-2xl font-black mb-2 text-slate-800">確定要結束嗎？</h3>
+                                    <p className="text-slate-500 mb-6 font-bold">遊戲進度將會遺失喔！</p>
+                                    <div className="flex gap-3">
+                                        <button onClick={()=>{setGameState('setup'); setShowExitConfirm(false);}} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold text-lg hover:bg-red-600 transition-colors">
+                                            確定退出
+                                        </button>
+                                        <button onClick={()=>setShowExitConfirm(false)} className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-xl font-bold text-lg hover:bg-slate-300 transition-colors">
+                                            繼續遊戲
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                        )}
                     </div>
-
-                    {/* 碰/放回 選項彈窗 (半透明、置底) */}
-                    {actionPending && !feedback && (
-                        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 w-[95%] max-w-lg bg-white/90 backdrop-blur-lg p-5 rounded-3xl shadow-2xl border border-slate-200 z-50 animate-bounce-short">
-                            <p className="text-center font-bold text-slate-700 text-lg mb-4">你覺得這兩張的答案一樣嗎？</p>
-                            <div className="flex gap-4">
-                                <button onClick={handlePong} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-4 rounded-2xl font-black text-2xl shadow-lg transition-transform hover:scale-105">
-                                    相同！碰！
-                                </button>
-                                <button onClick={handlePass} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-4 rounded-2xl font-bold text-xl shadow-md transition-transform hover:scale-105">
-                                    不同，放回
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 正確/錯誤 回饋提示 */}
-                    {feedback && (
-                        <div className="fixed inset-0 flex items-center justify-center z-[60] pointer-events-none">
-                            <div className={`px-8 py-6 rounded-3xl text-white font-black text-2xl md:text-3xl shadow-2xl transform scale-110 ${feedback.type==='success' ? 'bg-green-500' : feedback.type==='error' ? 'bg-red-500' : 'bg-blue-500'}`}>
-                                {feedback.text}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 退出確認視窗 */}
-                    {showExitConfirm && (
-                        <div className="fixed inset-0 flex items-center justify-center z-[100]">
-                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowExitConfirm(false)}></div>
-                            <div className="relative bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm w-11/12 animate-bounce-short">
-                                <h3 className="text-2xl font-black mb-2 text-slate-800">確定要結束嗎？</h3>
-                                <p className="text-slate-500 mb-6 font-bold">遊戲進度將會遺失喔！</p>
-                                <div className="flex gap-3">
-                                    <button onClick={()=>{setGameState('setup'); setShowExitConfirm(false);}} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold text-lg hover:bg-red-600 transition-colors">
-                                        確定退出
-                                    </button>
-                                    <button onClick={()=>setShowExitConfirm(false)} className="flex-1 bg-slate-200 text-slate-700 py-3 rounded-xl font-bold text-lg hover:bg-slate-300 transition-colors">
-                                        繼續遊戲
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
+                );
+            }
 
             // 3. 遊戲結束畫面
             if (gameState === 'gameover') {
