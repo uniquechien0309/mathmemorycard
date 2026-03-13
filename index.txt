@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數學翻翻樂 - 三位數加減法</title>
+    
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 React 和 ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- 引入 Babel 用於瀏覽器內編譯 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* 3D 翻牌動畫相關 CSS */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+        .card-transition {
+            transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+        }
+        .card-pattern {
+            background-color: #3b82f6;
+            background-image: radial-gradient(#ffffff 2px, transparent 2px);
+            background-size: 20px 20px;
+        }
+        /* 防止選取文字 */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans min-h-screen no-select text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- SVG 圖標組件 ---
+        const IconUser = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        );
+        const IconTrophy = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+        );
+
+        // --- 數學題目生成邏輯 ---
+        function gen3Digit(target) {
+            const isAdd = Math.random() > 0.5;
+            if (isAdd) {
+                const minA = Math.max(10, target - 999);
+                const maxA = Math.min(target - 10, 999);
+                if (minA >= maxA) return `${target}`; 
+                const a = Math.floor(Math.random() * (maxA - minA + 1)) + minA;
+                return `${a} + ${target - a}`;
+            } else {
+                const minA = target + 10;
+                const maxA = 999;
+                if (minA >= maxA) return `${target}`;
+                const a = Math.floor(Math.random() * (maxA - minA + 1)) + minA;
+                return `${a} - ${a - target}`;
+            }
+        }
+
+        function gen2Digit(target) {
+            const isAdd = Math.random() > 0.5;
+            if (isAdd) {
+                const minA = Math.max(10, target - 99);
+                const maxA = Math.min(target - 10, 99);
+                if (minA >= maxA) return `${target}`; 
+                const a = Math.floor(Math.random() * (maxA - minA + 1)) + minA;
+                return `${a} + ${target - a}`;
+            } else {
+                const minA = target + 10;
+                const maxA = 99;
+                if (minA >= maxA) return `${target}`;
+                const a = Math.floor(Math.random() * (maxA - minA + 1)) + minA;
+                return `${a} - ${a - target}`;
+            }
+        }
+
+        function generateCards(count, type) {
+            let cards = [];
+            let usedValues = new Set();
+            const pairCount = count / 2;
+
+            for (let i = 0; i < pairCount; i++) {
+                let target, eq1, eq2;
+
+                if (type === '3digit') {
+                    do { target = Math.floor(Math.random() * 800) + 150; } while (usedValues.has(target));
+                    usedValues.add(target);
+                    eq1 = gen3Digit(target);
+                    eq2 = gen3Digit(target);
+                } else if (type === '2digit') {
+                    do { target = Math.floor(Math.random() * 70) + 20; } while (usedValues.has(target)); // 20~89
+                    usedValues.add(target);
+                    eq1 = gen2Digit(target);
+                    eq2 = gen2Digit(target);
+                } else if (type === 'multiplication') {
+                    let A, B;
+                    do {
+                        A = Math.floor(Math.random() * 18) + 2; // 產生 2 ~ 19 (一位數或十幾)
+                        B = Math.floor(Math.random() * 8) + 2;  // 產生 2 ~ 9 (一位數)
+                        target = A * B;
+                    } while (usedValues.has(target));
+                    usedValues.add(target);
+                    eq1 = `${A} × ${B}`;
+                    // 乘法第二個算式隨機調換前後順序
+                    eq2 = Math.random() > 0.5 ? `${B} × ${A}` : `${A} × ${B}`;
+                }
+
+                const pairType = Math.random();
+                let content1, content2;
+
+                // 決定牌組類型：20% 答案配答案, 40% 題目配答案, 40% 題目配題目
+                if (pairType < 0.2) {
+                    content1 = `${target}`;
+                    content2 = `${target}`;
+                } else if (pairType < 0.6) {
+                    content1 = eq1;
+                    content2 = `${target}`;
+                } else {
+                    content1 = eq1;
+                    content2 = eq2;
+                }
+
+                cards.push({ id: `p${i}_a`, content: content1, value: target, isMatched: false, isFlipped: false });
+                cards.push({ id: `p${i}_b`, content: content2, value: target, isMatched: false, isFlipped: false });
+            }
+            
+            // 打亂陣列順序
+            return cards.sort(() => Math.random() - 0.5);
+        }
+
+        // --- 主應用組件 ---
+        const App = () => {
+            const [gameState, setGameState] = useState('setup'); // 'setup', 'playing', 'gameover'
+            const [problemType, setProblemType] = useState('3digit'); // '3digit', '2digit', 'multiplication'
+            const [cardCount, setCardCount] = useState(16);
+            const [playerCount, setPlayerCount] = useState(4);
+            const [players, setPlayers] = useState([
+                { name: '', score: 0 },
+                { name: '', score: 0 },
+                { name: '', score: 0 },
+                { name: '', score: 0 },
+            ]);
+            
+            const [cards, setCards] = useState([]);
+            const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
+            const [flippedIndices, setFlippedIndices] = useState([]);
+            const [actionPending, setActionPending] = useState(false);
+            const [feedback, setFeedback] = useState(null); // { text: string, type: 'success' | 'error' | 'info' }
+            const [startTime, setStartTime] = useState(null);
+            const [endTime, setEndTime] = useState(null);
+            const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+            const startGame = () => {
+                setCards(generateCards(cardCount, problemType));
+                setPlayers(players.map((p, i) => ({ 
+                    ...p, 
+                    name: p.name.trim() === '' ? `玩家 ${i + 1}` : p.name,
+                    score: 0 
+                })));
+                setCurrentPlayerIndex(0);
+                setFlippedIndices([]);
+                setActionPending(false);
+                setFeedback(null);
+                setStartTime(Date.now());
+                setShowExitConfirm(false);
+                setGameState('playing');
+            };
+
+            const handleCardClick = (index) => {
+                // 如果已經有動作等待處理、牌已被翻開、或牌已配對，則忽略點擊
+                if (actionPending || cards[index].isFlipped || cards[index].isMatched || flippedIndices.length >= 2) {
+                    return;
+                }
+
+                const newCards = [...cards];
+                newCards[index].isFlipped = true;
+                setCards(newCards);
+
+                const newFlipped = [...flippedIndices, index];
+                setFlippedIndices(newFlipped);
+
+                if (newFlipped.length === 2) {
+                    setActionPending(true);
+                }
+            };
+
+            const finalizeTurn = (isMatch) => {
+                setTimeout(() => {
+                    setCards(prevCards => {
+                        const newCards = [...prevCards];
+                        if (isMatch) {
+                            newCards[flippedIndices[0]].isMatched = true;
+                            newCards[flippedIndices[1]].isMatched = true;
+                        } else {
+                            newCards[flippedIndices[0]].isFlipped = false;
+                            newCards[flippedIndices[1]].isFlipped = false;
+                        }
+                        
+                        // 檢查是否遊戲結束
+                        if (newCards.every(c => c.isMatched)) {
+                            setEndTime(Date.now());
+                            setGameState('gameover');
+                        }
+                        
+                        return newCards;
+                    });
+                    
+                    setFlippedIndices([]);
+                    setActionPending(false);
+                    setFeedback(null);
+                    // 換下一位玩家
+                    setCurrentPlayerIndex((prev) => (prev + 1) % players.length);
+                }, 2000); // 顯示回饋 2 秒後進入下一回合
+            };
+
+            const handlePong = () => {
+                const [idx1, idx2] = flippedIndices;
+                const val1 = cards[idx1].value;
+                const val2 = cards[idx2].value;
+                const isMatch = val1 === val2;
+
+                if (isMatch) {
+                    setFeedback({ text: "答對了！答案相同，得 2 分！", type: "success" });
+                    setPlayers(prev => {
+                        const newPlayers = [...prev];
+                        newPlayers[currentPlayerIndex].score += 2;
+                        return newPlayers;
+                    });
+                    finalizeTurn(true);
+                } else {
+                    setFeedback({ text: "算錯囉！這兩張答案不一樣，放回原處。", type: "error" });
+                    finalizeTurn(false);
+                }
+            };
+
+            const handlePass = () => {
+                const [idx1, idx2] = flippedIndices;
+                const val1 = cards[idx1].value;
+                const val2 = cards[idx2].value;
+                const isMatch = val1 === val2;
+
+                if (isMatch) {
+                    setFeedback({ text: "哎呀！其實這兩張答案是一樣的喔！", type: "error" });
+                } else {
+                    setFeedback({ text: "判斷正確！答案不同，安全過關換下一位。", type: "info" });
+                }
+                finalizeTurn(false);
+            };
+
+            const renderSetup = () => (
+                <div className="max-w-md mx-auto mt-16 bg-white p-8 rounded-2xl shadow-xl">
+                    <div className="text-center mb-8">
+                        <h1 className="text-4xl font-extrabold text-blue-600 mb-2">數學翻翻樂</h1>
+                        <p className="text-slate-500">趣味數學挑戰，多人對戰！</p>
+                    </div>
+
+                    <div className="space-y-4 mb-6">
+                        <h3 className="font-bold text-lg text-slate-700">選擇題型</h3>
+                        <div className="flex gap-2">
+                            {[
+                                { id: '2digit', label: '兩位數加減法' },
+                                { id: '3digit', label: '三位數加減法' },
+                                { id: 'multiplication', label: '乘法' }
+                            ].map(pt => (
+                                <button
+                                    key={pt.id}
+                                    onClick={() => setProblemType(pt.id)}
+                                    className={`flex-1 py-2 md:py-3 rounded-xl font-bold transition-all text-sm md:text-base ${problemType === pt.id ? 'bg-purple-600 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                >
+                                    {pt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 mb-6">
+                        <h3 className="font-bold text-lg text-slate-700">選擇玩家人數</h3>
+                        <div className="flex gap-2">
+                            {[1, 2, 3, 4].map(num => (
+                                <button
+                                    key={`pc-${num}`}
+                                    onClick={() => {
+                                        setPlayerCount(num);
+                                        setPlayers(prev => {
+                                            const newPlayers = [...prev];
+                                            if (num > prev.length) {
+                                                for(let i=prev.length; i<num; i++) newPlayers.push({name: '', score: 0});
+                                            } else {
+                                                newPlayers.splice(num);
+                                            }
+                                            return newPlayers;
+                                        });
+                                    }}
+                                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${playerCount === num ? 'bg-green-600 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                >
+                                    {num} 人
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 mb-6">
+                        <h3 className="font-bold text-lg text-slate-700">選擇難度 (卡牌數量)</h3>
+                        <div className="flex gap-2">
+                            {[8, 16, 24].map(num => (
+                                <button
+                                    key={`cc-${num}`}
+                                    onClick={() => setCardCount(num)}
+                                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${cardCount === num ? 'bg-blue-600 text-white shadow-lg scale-105' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                >
+                                    {num} 張
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 mb-8">
+                        <h3 className="font-bold text-lg text-slate-700">設定玩家名稱</h3>
+                        {players.map((p, i) => (
+                            <div key={i} className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold
+                                    ${i===0?'bg-red-400':i===1?'bg-blue-400':i===2?'bg-green-400':'bg-purple-400'}`}>
+                                    {i + 1}
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder={`玩家 ${i + 1}`}
+                                    value={p.name}
+                                    onChange={(e) => {
+                                        const newP = [...players];
+                                        newP[i].name = e.target.value;
+                                        setPlayers(newP);
+                                    }}
+                                    className="flex-1 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-400 focus:outline-none"
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={startGame}
+                        className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-bold text-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+                    >
+                        開始遊戲
+                    </button>
+                </div>
+            );
+
+            const getGridCols = () => {
+                if (cardCount === 8) return 'grid-cols-2 md:grid-cols-4';
+                if (cardCount === 16) return 'grid-cols-4';
+                if (cardCount === 24) return 'grid-cols-4 md:grid-cols-6';
+            };
+
+            const renderPlaying = () => (
+                <div className="max-w-6xl mx-auto px-4 pt-12 pb-48 flex flex-col min-h-screen relative">
+                    {/* 返回設定按鈕 */}
+                    <button 
+                        onClick={() => setShowExitConfirm(true)}
+                        className="absolute top-2 right-4 md:top-6 md:right-6 flex items-center gap-1 bg-white hover:bg-slate-100 text-slate-600 px-3 py-2 rounded-xl shadow border border-slate-200 font-bold transition-all z-10"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                        返回
+                    </button>
+
+                    {/* 頂部計分板 */}
+                    <div className="flex flex-wrap gap-4 mb-8 justify-center mt-8 md:mt-0">
+                        {players.map((p, i) => {
+                            const isCurrent = i === currentPlayerIndex;
+                            const colors = [
+                                'from-red-100 to-red-50 border-red-300 text-red-700',
+                                'from-blue-100 to-blue-50 border-blue-300 text-blue-700',
+                                'from-green-100 to-green-50 border-green-300 text-green-700',
+                                'from-purple-100 to-purple-50 border-purple-300 text-purple-700'
+                            ];
+                            const activeColors = [
+                                'ring-4 ring-red-400 shadow-xl scale-110',
+                                'ring-4 ring-blue-400 shadow-xl scale-110',
+                                'ring-4 ring-green-400 shadow-xl scale-110',
+                                'ring-4 ring-purple-400 shadow-xl scale-110'
+                            ];
+
+                            return (
+                                <div key={i} className={`flex-1 min-w-[150px] bg-gradient-to-b border-2 rounded-2xl p-4 transition-all duration-300 ${colors[i]} ${isCurrent ? activeColors[i] : 'opacity-70'}`}>
+                                    <div className="flex items-center gap-2 font-bold mb-1">
+                                        <IconUser />
+                                        <span className="truncate">{p.name}</span>
+                                    </div>
+                                    <div className="text-3xl font-black">{p.score} <span className="text-sm font-normal">分</span></div>
+                                    {isCurrent && <div className="mt-2 text-sm font-bold bg-white/50 px-2 py-1 rounded-lg inline-block animate-pulse">🎯 現在輪到你</div>}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* 卡牌網格 */}
+                    <div className={`grid gap-4 flex-1 content-start ${getGridCols()} max-w-5xl mx-auto w-full`}>
+                        {cards.map((card, index) => (
+                            <div 
+                                key={card.id} 
+                                className={`perspective-1000 aspect-[3/4] cursor-pointer ${card.isMatched ? 'opacity-0 pointer-events-none transition-opacity duration-1000' : ''}`}
+                                onClick={() => handleCardClick(index)}
+                            >
+                                <div className={`relative w-full h-full transform-style-3d card-transition ${card.isFlipped ? 'rotate-y-180' : ''}`}>
+                                    {/* 卡牌背面 (未翻開) */}
+                                    <div className="absolute inset-0 backface-hidden card-pattern rounded-2xl shadow-md border-4 border-white flex items-center justify-center">
+                                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                                            <span className="text-white font-black text-2xl">?</span>
+                                        </div>
+                                    </div>
+                                    {/* 卡牌正面 (翻開) */}
+                                    <div className="absolute inset-0 backface-hidden rotate-y-180 bg-white rounded-2xl shadow-lg border-4 border-slate-200 flex items-center justify-center p-2 text-center">
+                                        <span className={`font-black tracking-wider ${card.content.includes('+') || card.content.includes('-') ? 'text-2xl md:text-3xl text-slate-800' : 'text-4xl md:text-5xl text-blue-600'}`}>
+                                            {card.content}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 動作按鈕彈跳窗 (當翻開兩張牌時) */}
+                    {actionPending && !feedback && (
+                        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white/95 backdrop-blur-md p-4 md:p-6 rounded-3xl shadow-2xl border-2 border-slate-200 z-50 w-[95%] max-w-lg animate-bounce-short">
+                            <h3 className="text-lg md:text-xl font-bold text-center mb-3 text-slate-700">你覺得這兩張的答案一樣嗎？</h3>
+                            <div className="flex gap-3">
+                                <button onClick={handlePong} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 md:py-4 rounded-2xl font-black text-xl md:text-2xl shadow-lg transition-transform hover:scale-105 active:scale-95">
+                                    相同！碰！
+                                </button>
+                                <button onClick={handlePass} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 md:py-4 rounded-2xl font-bold text-lg md:text-xl shadow transition-transform hover:scale-105 active:scale-95">
+                                    不一樣，放回
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 回饋訊息 */}
+                    {feedback && (
+                        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+                            <div className="absolute inset-0 bg-black/20"></div>
+                            <div className={`relative px-8 py-6 rounded-3xl shadow-2xl font-black text-3xl transform transition-all duration-300 scale-110 
+                                ${feedback.type === 'success' ? 'bg-green-500 text-white' : 
+                                  feedback.type === 'error' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}`}>
+                                {feedback.text}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 退出確認彈窗 */}
+                    {showExitConfirm && (
+                        <div className="fixed inset-0 flex items-center justify-center z-[100]">
+                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowExitConfirm(false)}></div>
+                            <div className="relative bg-white p-6 md:p-8 rounded-3xl shadow-2xl max-w-sm w-11/12 text-center animate-bounce-short">
+                                <h3 className="text-2xl font-black text-slate-800 mb-2">確定要結束嗎？</h3>
+                                <p className="text-slate-500 mb-6 font-bold">目前的遊戲進度將會遺失喔！</p>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setShowExitConfirm(false);
+                                            setGameState('setup');
+                                        }}
+                                        className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold text-lg transition-transform hover:scale-105"
+                                    >
+                                        確定退出
+                                    </button>
+                                    <button
+                                        onClick={() => setShowExitConfirm(false)}
+                                        className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 rounded-xl font-bold text-lg transition-transform hover:scale-105"
+                                    >
+                                        繼續遊戲
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+
+            const renderGameOver = () => {
+                const maxScore = Math.max(...players.map(p => p.score));
+                const winners = players.filter(p => p.score === maxScore);
+                
+                const timeTaken = Math.floor((endTime - startTime) / 1000);
+                const minutes = Math.floor(timeTaken / 60);
+                const seconds = timeTaken % 60;
+                const timeString = minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`;
+
+                return (
+                    <div className="flex items-center justify-center min-h-screen bg-slate-800/50 p-4">
+                        <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-lg w-full text-center">
+                            <div className="flex justify-center mb-6">
+                                <IconTrophy />
+                            </div>
+                            <h2 className="text-4xl font-black text-slate-800 mb-2">遊戲結束！</h2>
+                            
+                            <div className="my-8">
+                                <h3 className="text-xl font-bold text-slate-500 mb-4">🏆 贏家 🏆</h3>
+                                <div className="text-3xl font-black text-yellow-500 mb-2">
+                                    {winners.map(w => w.name).join(' & ')} ({maxScore} 分)
+                                </div>
+                                <div className="text-lg font-bold text-blue-600 bg-blue-50 py-2 rounded-xl mb-6 inline-block px-6 border border-blue-100">
+                                    ⏱️ 完成時間：{timeString}
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    {players.map((p, i) => (
+                                        <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
+                                            <span className="font-bold text-slate-700">{p.name}</span>
+                                            <span className="font-black text-blue-600">{p.score} 分</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => setGameState('setup')}
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xl shadow-lg transition-all"
+                            >
+                                再玩一局
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div>
+                    {gameState === 'setup' && renderSetup()}
+                    {gameState === 'playing' && renderPlaying()}
+                    {gameState === 'gameover' && renderGameOver()}
+                    
+                    {/* 客製化短彈跳動畫 */}
+                    <style dangerouslySetInnerHTML={{__html: `
+                        @keyframes bounce-short {
+                            0%, 100% { transform: translateX(-50%) translateY(0); }
+                            50% { transform: translateX(-50%) translateY(-10px); }
+                        }
+                        .animate-bounce-short {
+                            animation: bounce-short 1s ease-in-out infinite;
+                        }
+                    `}} />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
